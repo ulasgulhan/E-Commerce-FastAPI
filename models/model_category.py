@@ -3,7 +3,7 @@ from fastapi import Depends
 from database import Base, SessionLocal
 from sqlalchemy import Column, ForeignKey, Integer, String, Boolean
 from slugify import slugify
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, relationship
 
 
 def get_db():
@@ -25,6 +25,8 @@ class Category(Base):
     slug = Column(String, unique=True, index=True)
     parent_id = Column(Integer, ForeignKey('categories.id'), nullable=True)
     is_active = Column(Boolean, default=True)
+
+    products = relationship("Product", back_populates="category")
 
 
 
