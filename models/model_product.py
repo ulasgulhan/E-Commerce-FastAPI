@@ -1,3 +1,4 @@
+from ast import For
 from typing import Annotated
 from fastapi import Depends
 from slugify import slugify
@@ -30,10 +31,12 @@ class Product(Base):
     price = Column(Integer)
     image_url = Column(String)
     stock = Column(Integer)
+    supplier_id = Column(Integer, ForeignKey('users.id'), nullable=True)
     category_id = Column(Integer, ForeignKey('categories.id'))
     is_active = Column(Boolean, default=True)
 
     category = relationship('Category', back_populates='products')
+    user = relationship('User', back_populates='products')
 
 
     def generate_slug(self):

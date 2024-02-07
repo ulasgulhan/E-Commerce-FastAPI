@@ -7,6 +7,7 @@ from models.model_category import Category
 from .auth import get_current_user
 from starlette import status
 from models.model_product import Product
+from models.model_user import User
 
 
 router = APIRouter(prefix='/products', tags=['products'])
@@ -52,6 +53,7 @@ async def create_product(db: db_dependency, user: user_dependency, create_model:
             )
 
             product.generate_slug()
+            product.supplier_id = user.get('id')
 
             db.add(product)
             db.commit()
@@ -65,6 +67,19 @@ async def create_product(db: db_dependency, user: user_dependency, create_model:
         return{
             'error': str(err)
         }
+
+
+@router.get('/', status_code=status.HTTP_200_OK)
+async def all_products(db: db_dependency):
+    products = db.query(Product).filter(Product.is_active == True, Product.stock > 0).all()
+    
+    if not products:
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='There are no product'
+        )
+    
+    return products
 
 
 @router.get('/{category_slug}', status_code=status.HTTP_200_OK)
@@ -83,7 +98,6 @@ async def product_by_category(db: db_dependency, category_slug: str):
     while categories_to_process:
         current_category = categories_to_process.pop()
 
-        # products.extend(current_category.products)
         products.extend(db.query(Product).filter(Product.category_id == current_category.id, Product.is_active == True, Product.stock > 0))
 
         subcategories = db.query(Category).filter(Category.parent_id == current_category.id).all()
@@ -106,10 +120,32 @@ async def product_detail(db: db_dependency, product_slug: str):
     return product
 
 
+@router.get('/supplier/{user_id}', status_code=status.HTTP_200_OK)
+async def product_by_supplier(db: db_dependency, user_id: int):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Supplier not found'
+        )
+
+    products = db.query(Product).filter(Product.supplier_id == user_id, Product.is_active == True, Product.stock > 0).all()
+
+    if not products:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Product not found'
+        )
+    
+    return products
+    
+
+
 @router.delete('/delete', status_code=status.HTTP_200_OK)
 async def delete_product(db: db_dependency, user: user_dependency, product_id: int):
-    if user is not None:
-        product = db.query(Product).filter(Product.id == product_id, Product.is_active == True).first()
+    product = db.query(Product).filter(Product.id == product_id, Product.is_active == True).first()
+    if user.get('id') == product.supplier_id:
 
         if not product:
             raise HTTPException(
