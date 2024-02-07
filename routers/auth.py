@@ -44,7 +44,6 @@ class CreateUserRequest(BaseModel):
     username: str
     email: str
     password: str
-    role: str
 
 
 class Token(BaseModel):
@@ -62,7 +61,6 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
             username=create_user_request.username,
             email=create_user_request.email,
             hashed_password=bcrypt_context.hash(create_user_request.password),
-            role=create_user_request.role,
         )
 
         db.add(create_user_model)
@@ -89,8 +87,8 @@ def authanticate_user(username: str, password: str, db: db_dependency):
     return user
 
 
-def create_access_token(username: str, user_id: int, user_role: str, expires_delta: timedelta):
-    encode = {'sub': username, 'id': user_id, 'role': user_role}
+def create_access_token(username: str, user_id: int, is_admin: bool, is_supplier: bool, is_customer: bool, expires_delta: timedelta):
+    encode = {'sub': username, 'id': user_id, 'is_admin': is_admin, 'is_supplier': is_supplier, 'is_customer': is_customer}
     expires = datetime.utcnow() + expires_delta
     encode.update({'exp': expires})
     return jwt.encode(encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -100,13 +98,13 @@ def create_access_token(username: str, user_id: int, user_role: str, expires_del
 async def login_for_access_token(db: db_dependency, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
     user = authanticate_user(form_data.username, form_data.password, db)
 
-    if not user:
+    if not user or user.is_active == False:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Could not validate user'
         )
 
-    token = create_access_token(user.username, user.id, user.role, expires_delta=timedelta(minutes=20))
+    token = create_access_token(user.username, user.id, user.is_admin, user.is_supplier, user.is_customer, expires_delta=timedelta(minutes=20))
 
     return {
         'access_token': token,
@@ -119,7 +117,9 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get('sub')
         user_id: int = payload.get('id')
-        role: str = payload.get('role')
+        is_admin: str = payload.get('is_admin')
+        is_supplier: str = payload.get('is_supplier')
+        is_customer: str = payload.get('is_customer')
 
         if username is None or user_id is None:
             raise HTTPException(
@@ -130,7 +130,9 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]):
         return {
             'username': username,
             'id': user_id,
-            'role': role
+            'is_admin': is_admin,
+            'is_supplier': is_supplier,
+            'is_customer': is_customer,
         }
     except JWTError:
         raise HTTPException(

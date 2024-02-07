@@ -37,19 +37,14 @@ class CreateProduct(BaseModel):
 @router.post('/create', status_code=status.HTTP_201_CREATED)
 async def create_product(db: db_dependency, user: user_dependency, create_model: CreateProduct):
     try:
-        if user.get('role') == 'customer':
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail='You are not authorized for this method'
-            )
-        else:
+        if user.get('is_admin') or user.get('is_supplier'):
             product = Product(
-                name = create_model.name,
-                description = create_model.description,
-                price = create_model.price,
-                image_url = create_model.image_url,
-                stock = create_model.stock,
-                category_id = create_model.category
+            name = create_model.name,
+            description = create_model.description,
+            price = create_model.price,
+            image_url = create_model.image_url,
+            stock = create_model.stock,
+            category_id = create_model.category
             )
 
             product.generate_slug()
@@ -62,6 +57,11 @@ async def create_product(db: db_dependency, user: user_dependency, create_model:
                 'status_code': status.HTTP_201_CREATED,
                 'transaction': 'Successful'
             }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='You are not authorized for this method'
+            )
         
     except Exception as err:
         return{
@@ -145,7 +145,7 @@ async def product_by_supplier(db: db_dependency, user_id: int):
 @router.delete('/delete', status_code=status.HTTP_200_OK)
 async def delete_product(db: db_dependency, user: user_dependency, product_id: int):
     product = db.query(Product).filter(Product.id == product_id, Product.is_active == True).first()
-    if user.get('id') == product.supplier_id:
+    if user.get('id') == product.supplier_id or user.get('is_admin'):
 
         if not product:
             raise HTTPException(

@@ -32,7 +32,8 @@ class CreateCategory(BaseModel):
 @router.post('/create', status_code=status.HTTP_201_CREATED)
 async def create_category(db: db_dependency, user: user_dependency, create_category: CreateCategory):
     try:
-        if user.get('role') == 'admin':
+        print(user)
+        if user.get('is_admin'):
             category_model = Category(
                 name = create_category.name,
                 parent_id = create_category.parent_id,
@@ -111,7 +112,7 @@ async def update_category(db: db_dependency, user: user_dependency, category_id:
 async def delete_category(db: db_dependency, user: user_dependency, category_id: int):
     category = db.query(Category).filter(Category.id == category_id).first()
 
-    if user.get('role') == 'admin':
+    if user.get('is_admin'):
         if category is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
