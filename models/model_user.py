@@ -18,5 +18,6 @@ class User(Base):
     is_customer = Column(Boolean, default=True)
 
     products = relationship('Product', back_populates='user')
+    comments = relationship('Comment', back_populates='user')
 
 

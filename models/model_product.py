@@ -37,10 +37,26 @@ class Product(Base):
 
     category = relationship('Category', back_populates='products')
     user = relationship('User', back_populates='products')
+    comments = relationship('Comment', back_populates='products')
+    
 
 
     def generate_slug(self):
         self.slug = slugify(self.name)
+
+
+class Comment(Base):
+    __tablename__ = 'comments'
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey('products.id'))
+    user_id = Column(Integer, ForeignKey('users.id'))
+    comment = Column(String)
+    parent_id = Column(Integer, ForeignKey('comments.id'), nullable=True)
+
+    user = relationship('User', back_populates='comments')
+    products = relationship('Product', back_populates='comments')
+    
 
 
 

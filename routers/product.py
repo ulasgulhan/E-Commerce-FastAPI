@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from database import SessionLocal
@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from models.model_category import Category
 from .auth import get_current_user
 from starlette import status
-from models.model_product import Product
+from models.model_product import Product, Comment
 from models.model_user import User
 
 
@@ -32,6 +32,11 @@ class CreateProduct(BaseModel):
     image_url: str
     stock: int
     category: int
+
+
+class CreateComment(BaseModel):
+    comment: str
+    parent_id: Optional[int] = None
 
 
 @router.post('/create', status_code=status.HTTP_201_CREATED)
@@ -110,6 +115,7 @@ async def product_by_category(db: db_dependency, category_slug: str):
 @router.get('/detail/{product_slug}', status_code=status.HTTP_200_OK)
 async def product_detail(db: db_dependency, product_slug: str):
     product = db.query(Product).filter(Product.slug == product_slug, Product.is_active == True, Product.stock > 0).first()
+    comments = db.query(Comment).filter(Comment.product_id == product.id).all()
 
     if not product:
         raise HTTPException(
@@ -117,7 +123,36 @@ async def product_detail(db: db_dependency, product_slug: str):
             detail='Product not found'
         )
     
-    return product
+    return {
+        'Product': product,
+        'Comments': comments
+    }
+
+
+@router.post('detail/{product_slug}/comment', status_code=status.HTTP_201_CREATED)
+async def create_comment(db: db_dependency, user: user_dependency, product_slug: str, create_comment: CreateComment):
+    product = db.query(Product).filter(Product.slug == product_slug, Product.is_active == True, Product.stock > 0).first()
+    try:
+        comment = Comment(
+            comment = create_comment.comment,
+            parent_id = create_comment.parent_id
+        )
+        comment.product_id = product.id
+        comment.user_id = user.get('id')
+
+        db.add(comment)
+        db.commit()
+
+        return{
+            'status_code': status.HTTP_201_CREATED,
+            'transaction': 'Successful'
+        }
+    except Exception as err:
+        return{
+            'error': str(err)
+        }
+
+
 
 
 @router.get('/supplier/{user_id}', status_code=status.HTTP_200_OK)
