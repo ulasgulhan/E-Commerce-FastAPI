@@ -1,12 +1,12 @@
 from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from database import SessionLocal
 from sqlalchemy.orm import Session
 from models.model_category import Category
 from .auth import get_current_user
 from starlette import status
-from models.model_product import Product, Comment
+from models.model_product import Product, Comment, Rating
 from models.model_user import User
 
 
@@ -37,6 +37,10 @@ class CreateProduct(BaseModel):
 class CreateComment(BaseModel):
     comment: str
     parent_id: Optional[int] = None
+
+
+class CreateRating(BaseModel):
+    rating: int = Field(ge=1, le=5, description='The rating must be between 1 and 5')
 
 
 @router.post('/create', status_code=status.HTTP_201_CREATED)
@@ -115,7 +119,8 @@ async def product_by_category(db: db_dependency, category_slug: str):
 @router.get('/detail/{product_slug}', status_code=status.HTTP_200_OK)
 async def product_detail(db: db_dependency, product_slug: str):
     product = db.query(Product).filter(Product.slug == product_slug, Product.is_active == True, Product.stock > 0).first()
-    comments = db.query(Comment).filter(Comment.product_id == product.id).all()
+    comments = db.query(Comment).filter(Comment.product_id == product.id, Comment.is_active == True).order_by('post_date').all()
+    
 
     if not product:
         raise HTTPException(
@@ -129,8 +134,8 @@ async def product_detail(db: db_dependency, product_slug: str):
     }
 
 
-@router.post('detail/{product_slug}/comment', status_code=status.HTTP_201_CREATED)
-async def create_comment(db: db_dependency, user: user_dependency, product_slug: str, create_comment: CreateComment):
+@router.post('/detail/{product_slug}/comment', status_code=status.HTTP_201_CREATED)
+async def create_comment(db: db_dependency, user: user_dependency, product_slug: str, create_comment: CreateComment, create_rating: CreateRating):
     product = db.query(Product).filter(Product.slug == product_slug, Product.is_active == True, Product.stock > 0).first()
     try:
         comment = Comment(
@@ -140,17 +145,121 @@ async def create_comment(db: db_dependency, user: user_dependency, product_slug:
         comment.product_id = product.id
         comment.user_id = user.get('id')
 
-        db.add(comment)
-        db.commit()
+        the_comment = db.query(Comment).filter(Comment.user_id == comment.user_id, Comment.product_id == comment.product_id, Comment.parent_id == None, Comment.is_active == True).first()
 
-        return{
-            'status_code': status.HTTP_201_CREATED,
-            'transaction': 'Successful'
-        }
+        if not the_comment:
+            rating = Rating(
+                rating = create_rating.rating
+            )
+
+            rating.product_id = product.id
+            rating.user_id = user.get('id')
+
+            comment.rating = rating.rating
+
+            db.add(comment)
+            db.commit()
+
+            rating.comment_id = comment.id
+
+            db.add(rating)
+            db.commit()
+
+            ratings = db.query(Rating).filter(Rating.product_id == product.id, Rating.is_active == True).all()
+            result = 0
+            for rating in ratings:
+                result += rating.rating
+
+            result = result/len(ratings)
+
+            product.rating = result
+
+            db.add(product)
+            db.commit()
+
+            return{
+                'status_code': status.HTTP_201_CREATED,
+                'transaction': 'Successful'
+            }
+
+        else:
+            if comment.parent_id is not None:
+                db.add(comment)
+                db.commit()
+
+                return{
+                    'status_code': status.HTTP_201_CREATED,
+                    'transaction': 'Successful'
+                }
+            else:
+                return{
+                    'detail': 'You cannot comment two times. You can answere another comment'
+                }
     except Exception as err:
         return{
             'error': str(err)
         }
+
+
+@router.patch('/detail/{product_slug}/comment', status_code=status.HTTP_200_OK)
+async def update_comment(db: db_dependency, user: user_dependency, comment_id: int, update_comment: CreateComment):
+    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    if comment:
+        if user.get('id') == comment.user_id or user.get('is_admin'):
+            comment.comment = update_comment.comment
+            db.add(comment)
+            db.commit()
+
+            return{
+                'status_code': status.HTTP_200_OK,
+                'detail': 'You successfully delete this comment'
+            }
+
+
+
+@router.delete('/comment/delete', status_code=status.HTTP_200_OK)
+async def delete_comment(db: db_dependency, user: user_dependency, comment_id: int):
+    comment = db.query(Comment).filter(Comment.id == comment_id, Comment.is_active == True).first()
+    if comment:
+        if user.get('id') == comment.user_id or user.get('is_admin'):
+            comment.is_active = False
+            db.add(comment)
+            db.commit()
+
+            rating = db.query(Rating).filter(Rating.product_id == comment.product_id, Rating.comment_id == comment.id).first()
+            rating.is_active = False
+            db.add(rating)
+            db.commit()
+            product = db.query(Product).filter(Product.id == comment.product_id).first()
+
+            ratings = db.query(Rating).filter(Rating.product_id == comment.product_id, Rating.is_active == True).all()
+
+
+            result = 0
+            for rate in ratings:
+                result += rate.rating
+
+            result = result/len(ratings)
+
+            product.rating = result
+
+            db.add(product)
+            db.commit()
+
+            return{
+                'status_code': status.HTTP_200_OK,
+                'detail': 'You successfully delete this comment'
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='You have not permisson to delete product'
+            )
+    else:
+        raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail='Comment not found'
+        )
 
 
 
