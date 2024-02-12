@@ -41,7 +41,7 @@ class Product(Base):
     user = relationship('User', back_populates='products')
     comments = relationship('Comment', back_populates='products')
     ratings = relationship('Rating', back_populates='products')
-    cart_item = relationship('Cart_Item', back_populates='products')
+    cart_items = relationship('Cart_Item', back_populates='products')
 
 
     def generate_slug(self):

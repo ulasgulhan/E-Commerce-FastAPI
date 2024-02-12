@@ -1,6 +1,6 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from models.model_user import User

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from database import engine
 from models import model_category, model_user, model_product, model_cart
-from routers import category, auth, product, permission, user_profile
+from routers import category, auth, product, permission, user_profile, cart
 
 
 app = FastAPI()
@@ -16,3 +16,4 @@ app.include_router(category.router)
 app.include_router(product.router)
 app.include_router(permission.router)
 app.include_router(user_profile.router)
+app.include_router(cart.router)

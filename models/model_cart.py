@@ -1,4 +1,4 @@
-from sqlalchemy import String, Integer, Boolean, Column, ForeignKey
+from sqlalchemy import DateTime, String, Integer, Boolean, Column, ForeignKey
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -8,10 +8,10 @@ class Cart(Base):
     __tablename__ = 'carts'
 
     id = Column(Integer, primary_key=True, index=True)
-    date_added = Column(Integer, default=datetime.now())
+    date_added = Column(DateTime, default=datetime.now())
     is_active = Column(Boolean, default=True)
 
-    cart_item = relationship('Cart_Item', back_populates='carts')
+    cart_items = relationship('Cart_Item', back_populates='cart')
 
 
 class Cart_Item(Base):
@@ -28,5 +28,3 @@ class Cart_Item(Base):
     products = relationship('Product', back_populates='cart_items')
     cart = relationship('Cart', back_populates='cart_items')
 
-    def sub_total(self):
-        return self.products.price * self.quantity

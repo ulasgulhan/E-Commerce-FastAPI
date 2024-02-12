@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from database import SessionLocal
 from sqlalchemy.orm import Session
+from models.model_cart import Cart, Cart_Item
 from models.model_category import Category
 from .auth import get_current_user
 from starlette import status
@@ -131,6 +132,41 @@ async def product_detail(db: db_dependency, product_slug: str):
     return {
         'Product': product,
         'Comments': comments
+    }
+
+
+@router.post('/detail/{product_slug}', status_code=status.HTTP_200_OK)
+async def add_cart(db: db_dependency, user: user_dependency, product_slug: str, itm_quantity: int):
+    product = db.query(Product).filter(Product.slug == product_slug, Product.is_active == True, Product.stock > 0).first()
+    cart = db.query(Cart).filter(Cart.is_active == True).join(Cart_Item).filter(Cart_Item.user_id == user.get('id')).first()
+
+    if not cart:
+        cart = Cart()
+        db.add(cart)
+        db.commit()
+    
+    cart_item = db.query(Cart_Item).filter(Cart_Item.cart_id == cart.id, Cart_Item.product_id == product.id, Cart_Item.is_active == True).first()
+
+    if cart_item:
+        cart_item.quantity += itm_quantity
+    else:
+        cart_item = Cart_Item(
+            user_id = user.get('id'),
+            product_id = product.id,
+            quantity = itm_quantity,
+            cart_id = cart.id,
+        )
+        db.add(cart_item)
+    
+    db.commit()
+
+    return{
+        'status_code': status.HTTP_200_OK,
+        'transaction': 'Successful',
+        'cart_item': {
+            'product_id': cart_item.product_id,
+            'quantity': cart_item.quantity
+        }
     }
 
 
